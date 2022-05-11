@@ -2,7 +2,7 @@
 
 * D3D9RenderShaderYUV : ok
 * D3D9VideoProcessor : ok
-* D3D11ShaderNV12 : ok (just a check to do with GPU NV12 format support)
+* D3D11ShaderNV12 : ok
 * D3D11VideoProcessor : ok
 * DirectXVideoScreen : not started
 * SimpleDesktopDuplication : ok
@@ -23,6 +23,7 @@ A DirectX9 program to convert BGRA texture to NV12 texture, using the video proc
 
 ## D3D11ShaderNV12
 
+<div style="color:red;font-weight:bold;font-size:18px">Notes: The original implementation only shows how to seperate Y, U, V channels from RGB texture, and downsample U/V plane(s), and merge them into a R8 plane, don't form a real NV12 texture in GPU side, now added some code to implement this code path.</div>
 A DirectX11 program to convert BGRA texture to NV12 texture, using shader only.
 
 ![ShaderNV12](./DirectXVideoScreen/Media/ShaderNV12.jpg)
