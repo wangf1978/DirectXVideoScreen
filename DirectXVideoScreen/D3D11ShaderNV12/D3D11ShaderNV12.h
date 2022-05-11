@@ -47,7 +47,10 @@ private:
 	ID3D11RenderTargetView* m_pChromaCBDownSampledRT = NULL;
 	ID3D11RenderTargetView* m_pChromaCRDownSampledRT = NULL;
 	ID3D11RenderTargetView* m_pFakeNV12RT = NULL;
-	ID3D11RenderTargetView* m_pNV12RT = NULL;
+	ID3D11RenderTargetView* m_pNV12LumaRT = NULL;
+	ID3D11RenderTargetView* m_pNV12ChromaRT = NULL;
+
+	ID3D11Texture2D*		m_pNV12Texture = NULL;
 
 	ID3D11ShaderResourceView* m_pInputRSV = NULL;
 	ID3D11ShaderResourceView* m_pLumaRSV = NULL;
@@ -91,6 +94,7 @@ private:
 	void ProcessFakeUVShader();
 	void ProcessFakeUVShaderMips();
 	void ProcessUVShader();
+	void ProcessYNV12Shader();
 
 	HRESULT InitVertexPixelShaders();
 	HRESULT InitTextures(CWICBitmap&);
@@ -122,6 +126,8 @@ private:
 	HRESULT CreateBmpFileFromChromaSurface(ID3D11RenderTargetView*, LPCWSTR, const BOOL);
 	HRESULT CreateBmpFileFromLumaChromaDownSampledSurface(ID3D11RenderTargetView*, ID3D11RenderTargetView*, LPCWSTR);
 	HRESULT CreateBmpFileFromNV12Surface(ID3D11RenderTargetView*, LPCWSTR);
+	HRESULT CreateBmpFileFromNV12Texture(ID3D11Texture2D*, LPCWSTR);
+	void	SaveNV12(ID3D11Texture2D* pTexture2D, const char* nv12_filename, uint32_t image_width, uint32_t image_height);
 };
 
 #endif

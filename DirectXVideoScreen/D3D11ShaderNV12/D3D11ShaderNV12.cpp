@@ -2,6 +2,10 @@
 // D3D11ShaderNV12.cpp
 //----------------------------------------------------------------------------------------------
 #include "StdAfx.h"
+#include <stdio.h>
+#include <wrl/client.h>
+
+using namespace Microsoft::WRL;
 
 HRESULT CD3D11ShaderNV12::InitShaderNV12(CWICBitmap& cWICBitmap)
 {
@@ -156,7 +160,7 @@ HRESULT CD3D11ShaderNV12::ProcessShaderNV12(const UINT uiWidth, const UINT uiHei
 	}
 	else if(ShaderConversion == CONVERT_NV12_SHADER)
 	{
-		ProcessYCbCrShader2();
+		ProcessYCbCrShader();
 
 		InitViewPort(uiWidth / 2, uiHeight / 2);
 		m_pD3D11DeviceContext->PSSetSamplers(0, 1, &m_pSamplerLinearState);
@@ -164,13 +168,17 @@ HRESULT CD3D11ShaderNV12::ProcessShaderNV12(const UINT uiWidth, const UINT uiHei
 
 		InitViewPort(uiWidth, uiHeight);
 		m_pD3D11DeviceContext->PSSetSamplers(0, 1, &m_pSamplerPointState);
-		ProcessYFakeNV12Shader();
+		ProcessYNV12Shader();
 
-		InitViewPort(uiWidth, uiHeight * 2);
+		InitViewPort(uiWidth / 2, uiHeight / 2);
 		ProcessUVShader();
 
-		IF_FAILED_RETURN(CreateBmpFileFromLumaSurface(m_pNV12RT, wszOutputImageFile1));
-		IF_FAILED_RETURN(CreateBmpFileFromNV12Surface(m_pNV12RT, wszOutputImageFile2));
+		//SaveNV12(m_pNV12Texture, "RGB2NV12_out.yuv", uiWidth, uiHeight);
+
+		CreateBmpFileFromNV12Texture(m_pNV12Texture, wszOutputImageFile2);
+
+		//IF_FAILED_RETURN(CreateBmpFileFromLumaSurface(m_pNV12RT, wszOutputImageFile1));
+		//IF_FAILED_RETURN(CreateBmpFileFromNV12Surface(m_pNV12RT, wszOutputImageFile2));
 	}
 	else
 	{
@@ -194,7 +202,10 @@ void CD3D11ShaderNV12::OnRelease()
 	SAFE_RELEASE(m_pChromaCBDownSampledRT);
 	SAFE_RELEASE(m_pChromaCRDownSampledRT);
 	SAFE_RELEASE(m_pFakeNV12RT);
-	SAFE_RELEASE(m_pNV12RT);
+	SAFE_RELEASE(m_pNV12LumaRT);
+	SAFE_RELEASE(m_pNV12ChromaRT);
+
+	SAFE_RELEASE(m_pNV12Texture);
 
 	SAFE_RELEASE(m_pInputRSV);
 	SAFE_RELEASE(m_pLumaRSV);
@@ -377,6 +388,17 @@ void CD3D11ShaderNV12::ProcessYFakeNV12Shader()
 	m_pD3D11DeviceContext->Flush();
 }
 
+void CD3D11ShaderNV12::ProcessYNV12Shader()
+{
+	m_pD3D11DeviceContext->OMSetRenderTargets(1, &m_pNV12LumaRT, NULL);
+	m_pD3D11DeviceContext->ClearRenderTargetView(m_pNV12LumaRT, DirectX::Colors::Aquamarine);
+	m_pD3D11DeviceContext->VSSetShader(m_pVertexShader, NULL, 0);
+	m_pD3D11DeviceContext->PSSetShader(m_pPixelShader, NULL, 0);
+	m_pD3D11DeviceContext->PSSetShaderResources(0, 1, &m_pLumaRSV);
+	m_pD3D11DeviceContext->Draw(4, 0);
+	m_pD3D11DeviceContext->Flush();
+}
+
 void CD3D11ShaderNV12::ProcessFakeUVShader()
 {
 	m_pD3D11DeviceContext->VSSetShader(m_pCombinedUVVertexShader, NULL, 0);
@@ -401,7 +423,9 @@ void CD3D11ShaderNV12::ProcessFakeUVShaderMips()
 
 void CD3D11ShaderNV12::ProcessUVShader()
 {
-	m_pD3D11DeviceContext->VSSetShader(m_pCombinedUVVertexShader, NULL, 0);
+	m_pD3D11DeviceContext->OMSetRenderTargets(1, &m_pNV12ChromaRT, NULL);
+	m_pD3D11DeviceContext->ClearRenderTargetView(m_pNV12ChromaRT, DirectX::Colors::Aquamarine);
+	m_pD3D11DeviceContext->VSSetShader(m_pVertexShader, NULL, 0);
 	m_pD3D11DeviceContext->PSSetShader(m_pChromaCbCrPixelShader, NULL, 0);
 	m_pD3D11DeviceContext->PSSetShaderResources(0, 1, &m_pChromaDownSampledRSV);
 	m_pD3D11DeviceContext->Draw(4, 0);
@@ -448,7 +472,7 @@ HRESULT CD3D11ShaderNV12::InitTextures(CWICBitmap& cWICBitmap)
 	IF_FAILED_RETURN(InitRenderTargetChromaBDownSampled(uiWidth, uiHeight));
 	IF_FAILED_RETURN(InitRenderTargetChromaCDownSampled(uiWidth, uiHeight));
 	IF_FAILED_RETURN(InitRenderTargetFakeNV12(uiWidth, uiHeight));
-	//IF_FAILED_RETURN(InitRenderTargetNV12(uiWidth, uiHeight));
+	IF_FAILED_RETURN(InitRenderTargetNV12(uiWidth, uiHeight));
 
 	return hr;
 }
@@ -1146,7 +1170,6 @@ HRESULT CD3D11ShaderNV12::InitRenderTargetFakeNV12(const UINT uiWidth, const UIN
 HRESULT CD3D11ShaderNV12::InitRenderTargetNV12(const UINT uiWidth, const UINT uiHeight)
 {
 	HRESULT hr = S_OK;
-	ID3D11Texture2D* pTexture2D = NULL;
 
 	D3D11_TEXTURE2D_DESC desc2D;
 	desc2D.Width = uiWidth;
@@ -1163,18 +1186,25 @@ HRESULT CD3D11ShaderNV12::InitRenderTargetNV12(const UINT uiWidth, const UINT ui
 
 	try
 	{
-		IF_FAILED_THROW(m_pD3D11Device->CreateTexture2D(&desc2D, NULL, &pTexture2D));
+		IF_FAILED_THROW(m_pD3D11Device->CreateTexture2D(&desc2D, NULL, &m_pNV12Texture));
 
 		D3D11_RENDER_TARGET_VIEW_DESC rtDesc;
 		rtDesc.Format = DXGI_FORMAT_R8_UNORM;
 		rtDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 		rtDesc.Texture2D.MipSlice = 0;
 
-		IF_FAILED_THROW(m_pD3D11Device->CreateRenderTargetView(pTexture2D, &rtDesc, &m_pNV12RT));
+		// D3D11 will map this render target view to the NV12 Luma plane
+		IF_FAILED_THROW(m_pD3D11Device->CreateRenderTargetView(m_pNV12Texture, &rtDesc, &m_pNV12LumaRT));
+
+		rtDesc.Format = DXGI_FORMAT_R8G8_UNORM;
+		rtDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+		rtDesc.Texture2D.MipSlice = 0;
+
+		// D3D11 will map this render target view to the NV12 Chroma plane(U/V Interleave Plane)
+		IF_FAILED_THROW(m_pD3D11Device->CreateRenderTargetView(m_pNV12Texture, &rtDesc, &m_pNV12ChromaRT));
+
 	}
 	catch(HRESULT){}
-
-	SAFE_RELEASE(pTexture2D);
 
 	return hr;
 }
@@ -1531,4 +1561,95 @@ HRESULT CD3D11ShaderNV12::CreateBmpFileFromNV12Surface(ID3D11RenderTargetView* p
 	SAFE_RELEASE(pNV12Texture);
 
 	return hr;
+}
+
+HRESULT CD3D11ShaderNV12::CreateBmpFileFromNV12Texture(ID3D11Texture2D* pNV12Texture, LPCWSTR wszOutputImageFile)
+{
+	HRESULT hr = S_OK;
+	D3D11_TEXTURE2D_DESC desc2D;
+	ID3D11Texture2D* pNV12StagingTexture = NULL;
+	D3D11_MAPPED_SUBRESOURCE MappedSubResource;
+	UINT uiSubResource = D3D11CalcSubresource(0, 0, 0);
+
+	try
+	{
+		pNV12Texture->GetDesc(&desc2D);
+
+		desc2D.BindFlags = 0;
+		desc2D.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+		desc2D.Usage = D3D11_USAGE_STAGING;
+		desc2D.MiscFlags = 0;
+
+		IF_FAILED_THROW(m_pD3D11Device->CreateTexture2D(&desc2D, NULL, &pNV12StagingTexture));
+
+		m_pD3D11DeviceContext->CopyResource(pNV12StagingTexture, pNV12Texture);
+
+		IF_FAILED_THROW(m_pD3D11DeviceContext->Map(pNV12StagingTexture, uiSubResource, D3D11_MAP_READ, 0, &MappedSubResource));
+
+		hr = ProcessNV12ToBmpFile(wszOutputImageFile, (BYTE*)MappedSubResource.pData, MappedSubResource.RowPitch, desc2D.Width, desc2D.Height);
+
+		m_pD3D11DeviceContext->Unmap(pNV12StagingTexture, uiSubResource);
+	}
+	catch (HRESULT) {}
+
+	SAFE_RELEASE(pNV12StagingTexture);
+
+	return hr;
+}
+
+void CD3D11ShaderNV12::SaveNV12(ID3D11Texture2D* pTexture2D, const char* nv12_filename, uint32_t image_width, uint32_t image_height)
+{
+	D3D11_TEXTURE2D_DESC desc;
+	ComPtr<ID3D11Texture2D>  spTemp;
+	ComPtr<IDXGISurface> spSurface;
+
+	pTexture2D->GetDesc(&desc);
+	//desc.Format = DXGI_FORMAT_NV12;
+	desc.ArraySize = 1;
+	desc.BindFlags = 0;
+	desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+	desc.Usage = D3D11_USAGE_STAGING;
+
+	if (SUCCEEDED(m_pD3D11Device->CreateTexture2D(&desc, NULL, &spTemp)))
+	{
+		m_pD3D11DeviceContext->CopyResource(spTemp.Get(), pTexture2D);
+
+		if (SUCCEEDED(spTemp.As(&spSurface)))
+		{
+			FILE *pFile = NULL;
+			fopen_s(&pFile, nv12_filename, "wb");
+
+			if (pFile != NULL) {
+				DXGI_MAPPED_RECT map;
+				if (SUCCEEDED(spSurface->Map(&map, DXGI_MAP_READ)))
+				{
+					uint32_t h = image_height;
+					if (h > desc.Height)
+						h = desc.Height;
+					uint32_t w = image_width;
+					if (w > (uint32_t)map.Pitch)
+						w = map.Pitch;
+
+					BYTE* pNV12 = map.pBits;
+					if (desc.Format == DXGI_FORMAT_NV12 || desc.Format == DXGI_FORMAT_R8_UNORM) {
+						// Copy Y plane
+						for (uint32_t lineidx = 0; lineidx < h; lineidx++)
+							fwrite(pNV12 + (size_t)map.Pitch * lineidx, 1, w, pFile);
+					}
+
+					if (desc.Format == DXGI_FORMAT_NV12)
+					{
+						// Copy UV plane
+						pNV12 += (size_t)map.Pitch*desc.Height;
+						for (uint32_t lineidx = 0; lineidx < h / 2; lineidx++)
+							fwrite(pNV12 + (size_t)map.Pitch * lineidx, 1, w, pFile);
+					}
+				}
+
+				fclose(pFile);
+			}
+		}
+	}
+
+	return;
 }
