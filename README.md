@@ -23,7 +23,8 @@ A DirectX9 program to convert BGRA texture to NV12 texture, using the video proc
 
 ## D3D11ShaderNV12
 
-<div style="color:red;font-weight:bold;font-size:18px">Notes: The original implementation only shows how to seperate Y, U, V channels from RGB texture, and downsample U/V plane(s), and merge them into a R8 plane, don't form a real NV12 texture in GPU side, now added some code to implement this code path.</div>
+**Notes: The original implementation only shows how to seperate Y, U, V channels from RGB texture, and downsample U/V plane(s), and merge them into a R8 plane, don't form a real NV12 texture in GPU side, now added some code to implement this code path.**
+
 A DirectX11 program to convert BGRA texture to NV12 texture, using shader only.
 
 ![ShaderNV12](./DirectXVideoScreen/Media/ShaderNV12.jpg)
