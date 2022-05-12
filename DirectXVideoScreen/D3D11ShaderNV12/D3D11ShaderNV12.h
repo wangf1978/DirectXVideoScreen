@@ -95,6 +95,7 @@ private:
 	void ProcessFakeUVShaderMips();
 	void ProcessUVShader();
 	void ProcessYNV12Shader();
+	void ProcessYChromaShader();
 
 	HRESULT InitVertexPixelShaders();
 	HRESULT InitTextures(CWICBitmap&);
