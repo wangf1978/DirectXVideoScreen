@@ -89,6 +89,7 @@ private:
 	void ProcessYCbCrShader2();
 	void ProcessYCbCrShaderMips();
 	void ProcessChromaDownSampledShader();
+	void ProcessChromaDownSampledShaderToNV12();
 	void ProcessChromaDownSampledShader2();
 	void ProcessYFakeNV12Shader();
 	void ProcessFakeUVShader();

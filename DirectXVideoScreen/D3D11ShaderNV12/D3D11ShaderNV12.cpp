@@ -163,21 +163,14 @@ HRESULT CD3D11ShaderNV12::ProcessShaderNV12(const UINT uiWidth, const UINT uiHei
 		// Separate the Luma and Chroma planes from RGB texture
 		ProcessYChromaShader();
 
-		// DownSample Chroma plane
+		// DownSample Chroma plane directly to NV12 interleaved U/V plane
 		InitViewPort(uiWidth / 2, uiHeight / 2);
 		m_pD3D11DeviceContext->PSSetSamplers(0, 1, &m_pSamplerLinearState);
-		ProcessChromaDownSampledShader();
+		ProcessChromaDownSampledShaderToNV12();
 		
-		// Merge down-sampled Chroma plane into the NV12 interleaved U/V plane
-		InitViewPort(uiWidth / 2, uiHeight / 2);
-		ProcessUVShader();
-
 		//SaveNV12(m_pNV12Texture, "RGB2NV12_out.yuv", uiWidth, uiHeight);
 
 		CreateBmpFileFromNV12Texture(m_pNV12Texture, wszOutputImageFile2);
-
-		//IF_FAILED_RETURN(CreateBmpFileFromLumaSurface(m_pNV12RT, wszOutputImageFile1));
-		//IF_FAILED_RETURN(CreateBmpFileFromNV12Surface(m_pNV12RT, wszOutputImageFile2));
 	}
 	else
 	{
@@ -365,6 +358,17 @@ void CD3D11ShaderNV12::ProcessChromaDownSampledShader()
 {
 	m_pD3D11DeviceContext->OMSetRenderTargets(1, &m_pChromaDownSampledRT, NULL);
 	m_pD3D11DeviceContext->ClearRenderTargetView(m_pChromaDownSampledRT, DirectX::Colors::Aquamarine);
+	m_pD3D11DeviceContext->VSSetShader(m_pVertexShader, NULL, 0);
+	m_pD3D11DeviceContext->PSSetShader(m_pPixelShader, NULL, 0);
+	m_pD3D11DeviceContext->PSSetShaderResources(0, 1, &m_pChromaRSV);
+	m_pD3D11DeviceContext->Draw(4, 0);
+	m_pD3D11DeviceContext->Flush();
+}
+
+void CD3D11ShaderNV12::ProcessChromaDownSampledShaderToNV12()
+{
+	m_pD3D11DeviceContext->OMSetRenderTargets(1, &m_pNV12ChromaRT, NULL);
+	m_pD3D11DeviceContext->ClearRenderTargetView(m_pNV12ChromaRT, DirectX::Colors::Aquamarine);
 	m_pD3D11DeviceContext->VSSetShader(m_pVertexShader, NULL, 0);
 	m_pD3D11DeviceContext->PSSetShader(m_pPixelShader, NULL, 0);
 	m_pD3D11DeviceContext->PSSetShaderResources(0, 1, &m_pChromaRSV);
