@@ -181,7 +181,7 @@ HRESULT CD3D11ShaderNV12::ProcessShaderNV12(const UINT uiWidth, const UINT uiHei
 		m_pD3D11DeviceContext->PSSetSamplers(0, 1, &m_pSamplerLinearState);
 		ProcessChromaDownSampledShaderToI420();
 
-		SaveI420(m_pI420Texture, "i:\\RGB2I420_out.yuv", uiWidth, uiHeight);
+		//SaveI420(m_pI420Texture, "RGB2I420_out.yuv", uiWidth, uiHeight);
 	}
 	else
 	{
@@ -1755,6 +1755,8 @@ void CD3D11ShaderNV12::SaveNV12(ID3D11Texture2D* pTexture2D, const char* nv12_fi
 						for (uint32_t lineidx = 0; lineidx < h / 2; lineidx++)
 							fwrite(pNV12 + (size_t)map.Pitch * lineidx, 1, w, pFile);
 					}
+
+					spSurface->Unmap();
 				}
 
 				fclose(pFile);
@@ -1813,16 +1815,18 @@ void CD3D11ShaderNV12::SaveI420(ID3D11Texture2D* pTexture2D, const char* nv12_fi
 					for (uint32_t lineidx = 0; lineidx < h / 4; lineidx++)
 						fwrite(pI420 + (size_t)map.Pitch * lineidx, 1, w, pFile);
 
-					if (w*h/4 > h/4*w)
-						fwrite(pI420 + (size_t)map.Pitch*h / 4, 1, w*h / 4 - h / 4 * w, pFile);
+					if (w*h / 4 > h / 4 * w)
+						fwrite(pI420 + (size_t)h / 4 * map.Pitch, 1, w*h / 4 - h / 4 * w, pFile);
 
 					// Copy V plane
-					pI420 += (size_t)map.Pitch*h / 4 + w * h / 4 - h / 4 * w;
+					pI420 += (size_t)h / 4 * map.Pitch + w * h / 4 - h / 4 * w;
 					for (uint32_t lineidx = 0; lineidx < h / 4; lineidx++)
 						fwrite(pI420 + (size_t)map.Pitch * lineidx, 1, w, pFile);
 
 					if (w*h / 4 > h / 4 * w)
-						fwrite(pI420 + (size_t)map.Pitch*h / 4, 1, w*h / 4 - h / 4 * w, pFile);
+						fwrite(pI420 + (size_t)h / 4 * map.Pitch, 1, w*h / 4 - h / 4 * w, pFile);
+
+					spSurface->Unmap();
 				}
 
 				fclose(pFile);
