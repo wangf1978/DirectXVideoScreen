@@ -23,7 +23,8 @@ public:
 		CONVERT_CHROMADOWNSAMPLED_MIPS,
 		CONVERT_FAKE_NV12_SHADER,
 		CONVERT_FAKE_NV12_SHADER_MIPS,
-		CONVERT_NV12_SHADER
+		CONVERT_NV12_SHADER,
+		CONVERT_I420_SHADER,
 	};
 
 	HRESULT InitShaderNV12(CWICBitmap&);
@@ -49,8 +50,11 @@ private:
 	ID3D11RenderTargetView* m_pFakeNV12RT = NULL;
 	ID3D11RenderTargetView* m_pNV12LumaRT = NULL;
 	ID3D11RenderTargetView* m_pNV12ChromaRT = NULL;
+	ID3D11RenderTargetView* m_pI420LumaRT = NULL;
+	ID3D11RenderTargetView* m_pI420ChromaRT = NULL;
 
 	ID3D11Texture2D*		m_pNV12Texture = NULL;
+	ID3D11Texture2D*		m_pI420Texture = NULL;
 
 	ID3D11ShaderResourceView* m_pInputRSV = NULL;
 	ID3D11ShaderResourceView* m_pLumaRSV = NULL;
@@ -69,6 +73,7 @@ private:
 
 	ID3D11PixelShader* m_pPixelShader = NULL;
 	ID3D11PixelShader* m_pPixelShader2 = NULL;
+	ID3D11PixelShader* m_pPixelShader3 = NULL;
 	ID3D11PixelShader* m_pLumaShader = NULL;
 	ID3D11PixelShader* m_pChromaShader = NULL;
 	ID3D11PixelShader* m_pYCbCrShader = NULL;
@@ -87,9 +92,11 @@ private:
 	void ProcessChromaShader();
 	void ProcessYCbCrShader();
 	void ProcessYCbCrShader2();
+	void ProcessYCbCrShader3();
 	void ProcessYCbCrShaderMips();
 	void ProcessChromaDownSampledShader();
 	void ProcessChromaDownSampledShaderToNV12();
+	void ProcessChromaDownSampledShaderToI420();
 	void ProcessChromaDownSampledShader2();
 	void ProcessYFakeNV12Shader();
 	void ProcessFakeUVShader();
@@ -121,6 +128,7 @@ private:
 	HRESULT InitRenderTargetChromaCDownSampled(const UINT, const UINT);
 	HRESULT InitRenderTargetFakeNV12(const UINT, const UINT);
 	HRESULT InitRenderTargetNV12(const UINT, const UINT);
+	HRESULT InitRenderTargetI420(const UINT, const UINT);
 
 	HRESULT CreateBmpFileFromRgbaSurface(ID3D11RenderTargetView*, LPCWSTR);
 	HRESULT CreateBmpFileFromLumaSurface(ID3D11RenderTargetView*, LPCWSTR);
@@ -130,6 +138,7 @@ private:
 	HRESULT CreateBmpFileFromNV12Surface(ID3D11RenderTargetView*, LPCWSTR);
 	HRESULT CreateBmpFileFromNV12Texture(ID3D11Texture2D*, LPCWSTR);
 	void	SaveNV12(ID3D11Texture2D* pTexture2D, const char* nv12_filename, uint32_t image_width, uint32_t image_height);
+	void	SaveI420(ID3D11Texture2D* pTexture2D, const char* nv12_filename, uint32_t image_width, uint32_t image_height);
 };
 
 #endif

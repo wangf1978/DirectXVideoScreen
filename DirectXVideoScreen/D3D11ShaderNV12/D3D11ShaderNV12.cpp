@@ -4,6 +4,7 @@
 #include "StdAfx.h"
 #include <stdio.h>
 #include <wrl/client.h>
+#include <assert.h>
 
 using namespace Microsoft::WRL;
 
@@ -172,6 +173,16 @@ HRESULT CD3D11ShaderNV12::ProcessShaderNV12(const UINT uiWidth, const UINT uiHei
 
 		CreateBmpFileFromNV12Texture(m_pNV12Texture, wszOutputImageFile2);
 	}
+	else if (ShaderConversion == CONVERT_I420_SHADER)
+	{
+		ProcessYCbCrShader3();
+
+		InitViewPort(uiWidth / 2, uiHeight / 2);
+		m_pD3D11DeviceContext->PSSetSamplers(0, 1, &m_pSamplerLinearState);
+		ProcessChromaDownSampledShaderToI420();
+
+		SaveI420(m_pI420Texture, "i:\\RGB2I420_out.yuv", uiWidth, uiHeight);
+	}
 	else
 	{
 		IF_FAILED_RETURN(E_NOTIMPL);
@@ -196,8 +207,11 @@ void CD3D11ShaderNV12::OnRelease()
 	SAFE_RELEASE(m_pFakeNV12RT);
 	SAFE_RELEASE(m_pNV12LumaRT);
 	SAFE_RELEASE(m_pNV12ChromaRT);
+	SAFE_RELEASE(m_pI420LumaRT);
+	SAFE_RELEASE(m_pI420ChromaRT);
 
 	SAFE_RELEASE(m_pNV12Texture);
+	SAFE_RELEASE(m_pI420Texture);
 
 	SAFE_RELEASE(m_pInputRSV);
 	SAFE_RELEASE(m_pLumaRSV);
@@ -219,6 +233,7 @@ void CD3D11ShaderNV12::OnRelease()
 
 	SAFE_RELEASE(m_pPixelShader);
 	SAFE_RELEASE(m_pPixelShader2);
+	SAFE_RELEASE(m_pPixelShader3);
 	SAFE_RELEASE(m_pLumaShader);
 	SAFE_RELEASE(m_pChromaShader);
 	SAFE_RELEASE(m_pYCbCrShader);
@@ -320,6 +335,24 @@ void CD3D11ShaderNV12::ProcessYCbCrShader2()
 	m_pD3D11DeviceContext->Flush();
 }
 
+void CD3D11ShaderNV12::ProcessYCbCrShader3()
+{
+	ID3D11RenderTargetView* pYCbCrRT[3];
+	pYCbCrRT[0] = m_pI420LumaRT;
+	pYCbCrRT[1] = m_pChromaCBRT;
+	pYCbCrRT[2] = m_pChromaCRRT;
+
+	m_pD3D11DeviceContext->OMSetRenderTargets(3, pYCbCrRT, NULL);
+	m_pD3D11DeviceContext->ClearRenderTargetView(pYCbCrRT[0], DirectX::Colors::Aquamarine);
+	m_pD3D11DeviceContext->ClearRenderTargetView(pYCbCrRT[1], DirectX::Colors::Aquamarine);
+	m_pD3D11DeviceContext->ClearRenderTargetView(pYCbCrRT[2], DirectX::Colors::Aquamarine);
+	m_pD3D11DeviceContext->VSSetShader(m_pVertexShader, NULL, 0);
+	m_pD3D11DeviceContext->PSSetShader(m_pYCbCrShader2, NULL, 0);
+	m_pD3D11DeviceContext->PSSetShaderResources(0, 1, &m_pInputRSV);
+	m_pD3D11DeviceContext->Draw(4, 0);
+	m_pD3D11DeviceContext->Flush();
+}
+
 void CD3D11ShaderNV12::ProcessYChromaShader()
 {
 	ID3D11RenderTargetView* pYCbCrRT[2];
@@ -372,6 +405,21 @@ void CD3D11ShaderNV12::ProcessChromaDownSampledShaderToNV12()
 	m_pD3D11DeviceContext->VSSetShader(m_pVertexShader, NULL, 0);
 	m_pD3D11DeviceContext->PSSetShader(m_pPixelShader, NULL, 0);
 	m_pD3D11DeviceContext->PSSetShaderResources(0, 1, &m_pChromaRSV);
+	m_pD3D11DeviceContext->Draw(4, 0);
+	m_pD3D11DeviceContext->Flush();
+}
+
+void CD3D11ShaderNV12::ProcessChromaDownSampledShaderToI420()
+{
+	ID3D11ShaderResourceView* pChromaRSV[2];
+	pChromaRSV[0] = m_pChromaCBRSV;
+	pChromaRSV[1] = m_pChromaCRRSV;
+
+	m_pD3D11DeviceContext->OMSetRenderTargets(1, &m_pI420ChromaRT, NULL);
+	m_pD3D11DeviceContext->ClearRenderTargetView(m_pI420ChromaRT, DirectX::Colors::Aquamarine);
+	m_pD3D11DeviceContext->VSSetShader(m_pVertexShader, NULL, 0);
+	m_pD3D11DeviceContext->PSSetShader(m_pPixelShader3, NULL, 0);
+	m_pD3D11DeviceContext->PSSetShaderResources(0, 2, pChromaRSV);
 	m_pD3D11DeviceContext->Draw(4, 0);
 	m_pD3D11DeviceContext->Flush();
 }
@@ -460,6 +508,7 @@ HRESULT CD3D11ShaderNV12::InitVertexPixelShaders()
 
 	IF_FAILED_RETURN(InitPixelShaderFromFile(L"ScreenPS.hlsl", &m_pPixelShader));
 	IF_FAILED_RETURN(InitPixelShaderFromFile(L"ScreenPS2.hlsl", &m_pPixelShader2));
+	IF_FAILED_RETURN(InitPixelShaderFromFile(L"ScreenPS3.hlsl", &m_pPixelShader3));
 	IF_FAILED_RETURN(InitPixelShaderFromFile(L"LumaPS.hlsl", &m_pLumaShader));
 	IF_FAILED_RETURN(InitPixelShaderFromFile(L"ChromaPS.hlsl", &m_pChromaShader));
 	IF_FAILED_RETURN(InitPixelShaderFromFile(L"YCbCrPS.hlsl", &m_pYCbCrShader));
@@ -492,6 +541,7 @@ HRESULT CD3D11ShaderNV12::InitTextures(CWICBitmap& cWICBitmap)
 	IF_FAILED_RETURN(InitRenderTargetChromaCDownSampled(uiWidth, uiHeight));
 	IF_FAILED_RETURN(InitRenderTargetFakeNV12(uiWidth, uiHeight));
 	IF_FAILED_RETURN(InitRenderTargetNV12(uiWidth, uiHeight));
+	IF_FAILED_RETURN(InitRenderTargetI420(uiWidth, uiHeight));
 
 	return hr;
 }
@@ -1228,6 +1278,48 @@ HRESULT CD3D11ShaderNV12::InitRenderTargetNV12(const UINT uiWidth, const UINT ui
 	return hr;
 }
 
+HRESULT CD3D11ShaderNV12::InitRenderTargetI420(const UINT uiWidth, const UINT uiHeight)
+{
+	HRESULT hr = S_OK;
+
+	D3D11_TEXTURE2D_DESC desc2D;
+	desc2D.Width = uiWidth;
+	desc2D.Height = uiHeight;
+	desc2D.MipLevels = 1;
+	desc2D.ArraySize = 1;
+	desc2D.Format = DXGI_FORMAT_NV12;
+	desc2D.SampleDesc.Count = 1;
+	desc2D.SampleDesc.Quality = 0;
+	desc2D.Usage = D3D11_USAGE_DEFAULT;
+	desc2D.BindFlags = D3D11_BIND_RENDER_TARGET;
+	desc2D.CPUAccessFlags = 0;
+	desc2D.MiscFlags = 0;
+
+	try
+	{
+		IF_FAILED_THROW(m_pD3D11Device->CreateTexture2D(&desc2D, NULL, &m_pI420Texture));
+
+		D3D11_RENDER_TARGET_VIEW_DESC rtDesc;
+		rtDesc.Format = DXGI_FORMAT_R8_UNORM;
+		rtDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+		rtDesc.Texture2D.MipSlice = 0;
+
+		// D3D11 will map this render target view to the NV12 Luma plane
+		IF_FAILED_THROW(m_pD3D11Device->CreateRenderTargetView(m_pI420Texture, &rtDesc, &m_pI420LumaRT));
+
+		rtDesc.Format = DXGI_FORMAT_R8G8_UNORM;
+		rtDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+		rtDesc.Texture2D.MipSlice = 0;
+
+		// D3D11 will map this render target view to the NV12 Chroma plane(U/V Interleave Plane)
+		IF_FAILED_THROW(m_pD3D11Device->CreateRenderTargetView(m_pI420Texture, &rtDesc, &m_pI420ChromaRT));
+
+	}
+	catch (HRESULT) {}
+
+	return hr;
+}
+
 HRESULT CD3D11ShaderNV12::CreateBmpFileFromRgbaSurface(ID3D11RenderTargetView* pD3D11RenderTargetView, LPCWSTR wszOutputImageFile)
 {
 	HRESULT hr = S_OK;
@@ -1619,7 +1711,7 @@ HRESULT CD3D11ShaderNV12::CreateBmpFileFromNV12Texture(ID3D11Texture2D* pNV12Tex
 void CD3D11ShaderNV12::SaveNV12(ID3D11Texture2D* pTexture2D, const char* nv12_filename, uint32_t image_width, uint32_t image_height)
 {
 	D3D11_TEXTURE2D_DESC desc;
-	ComPtr<ID3D11Texture2D>  spTemp;
+	ComPtr<ID3D11Texture2D> spTemp;
 	ComPtr<IDXGISurface> spSurface;
 
 	pTexture2D->GetDesc(&desc);
@@ -1663,6 +1755,74 @@ void CD3D11ShaderNV12::SaveNV12(ID3D11Texture2D* pTexture2D, const char* nv12_fi
 						for (uint32_t lineidx = 0; lineidx < h / 2; lineidx++)
 							fwrite(pNV12 + (size_t)map.Pitch * lineidx, 1, w, pFile);
 					}
+				}
+
+				fclose(pFile);
+			}
+		}
+	}
+
+	return;
+}
+
+void CD3D11ShaderNV12::SaveI420(ID3D11Texture2D* pTexture2D, const char* nv12_filename, uint32_t image_width, uint32_t image_height)
+{
+	D3D11_TEXTURE2D_DESC desc;
+	ComPtr<ID3D11Texture2D> spTemp;
+	ComPtr<IDXGISurface> spSurface;
+
+	pTexture2D->GetDesc(&desc);
+	//desc.Format = DXGI_FORMAT_NV12;
+	desc.ArraySize = 1;
+	desc.BindFlags = 0;
+	desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+	desc.Usage = D3D11_USAGE_STAGING;
+
+	assert(image_width % 2 == 0 && image_height % 2 == 0);
+
+	if (SUCCEEDED(m_pD3D11Device->CreateTexture2D(&desc, NULL, &spTemp)))
+	{
+		m_pD3D11DeviceContext->CopyResource(spTemp.Get(), pTexture2D);
+
+		if (SUCCEEDED(spTemp.As(&spSurface)))
+		{
+			FILE *pFile = NULL;
+			fopen_s(&pFile, nv12_filename, "wb");
+
+			if (pFile != NULL) {
+				DXGI_MAPPED_RECT map;
+				if (SUCCEEDED(spSurface->Map(&map, DXGI_MAP_READ)))
+				{
+					uint32_t h = image_height;
+					if (h > desc.Height)
+						h = desc.Height;
+					uint32_t w = image_width;
+					if (w > (uint32_t)map.Pitch)
+						w = map.Pitch;
+
+					BYTE* pI420 = map.pBits;
+					if (desc.Format == DXGI_FORMAT_NV12 || desc.Format == DXGI_FORMAT_R8_UNORM) {
+						// Copy Y plane
+						for (uint32_t lineidx = 0; lineidx < h; lineidx++)
+							fwrite(pI420 + (size_t)map.Pitch * lineidx, 1, w, pFile);
+					}
+
+					// Copy U plane
+					// The required U data w/2*h/2
+					pI420 += (size_t)map.Pitch*desc.Height;
+					for (uint32_t lineidx = 0; lineidx < h / 4; lineidx++)
+						fwrite(pI420 + (size_t)map.Pitch * lineidx, 1, w, pFile);
+
+					if (w*h/4 > h/4*w)
+						fwrite(pI420 + (size_t)map.Pitch*h / 4, 1, w*h / 4 - h / 4 * w, pFile);
+
+					// Copy V plane
+					pI420 += (size_t)map.Pitch*h / 4 + w * h / 4 - h / 4 * w;
+					for (uint32_t lineidx = 0; lineidx < h / 4; lineidx++)
+						fwrite(pI420 + (size_t)map.Pitch * lineidx, 1, w, pFile);
+
+					if (w*h / 4 > h / 4 * w)
+						fwrite(pI420 + (size_t)map.Pitch*h / 4, 1, w*h / 4 - h / 4 * w, pFile);
 				}
 
 				fclose(pFile);

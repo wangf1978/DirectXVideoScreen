@@ -4,6 +4,8 @@
 #include "StdAfx.h"
 
 #define INPUT_IMAGE L"..\\Media\\background.bmp"
+//#define INPUT_IMAGE L"..\\Media\\7206.bmp"
+//#define INPUT_IMAGE L"..\\Media\\odd_height.bmp"
 #define CONVERTED1_IMAGE L"ConvertedImage1.bmp"
 #define CONVERTED2_IMAGE L"ConvertedImage2.bmp"
 #define CONVERTED3_IMAGE L"ConvertedImage3.bmp"
@@ -37,8 +39,9 @@ void main()
 		// CONVERT_FAKE_NV12_SHADER (OK)
 		// CONVERT_FAKE_NV12_SHADER_MIPS (OK)
 		// CONVERT_NV12_SHADER (OK)
+		// CONVERT_I420_SHADER(OK)
 		cD3D11ShaderNV12.ProcessShaderNV12(cWICBitmap.GetWidth(), cWICBitmap.GetHeight(), 
-			CONVERTED1_IMAGE, CONVERTED2_IMAGE, CONVERTED3_IMAGE, CD3D11ShaderNV12::SHADER_CONVERSION::CONVERT_NV12_SHADER);
+			CONVERTED1_IMAGE, CONVERTED2_IMAGE, CONVERTED3_IMAGE, CD3D11ShaderNV12::SHADER_CONVERSION::CONVERT_I420_SHADER);
 	}
 
 	cD3D11ShaderNV12.OnRelease();
