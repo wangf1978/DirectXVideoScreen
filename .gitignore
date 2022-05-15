@@ -242,3 +242,6 @@ ModelManifest.xml
 .fake/
 /DumpTS_20171123.zip
 /src/nal_parser_src_20211207.zip
+/DirectXVideoScreen/D3D11ShaderNV12/ConvertedImage2_0.bmp
+/DirectXVideoScreen/D3D11ShaderNV12/ConvertedImage2.bmp
+/DirectXVideoScreen/D3D11ShaderNV12/ConvertedImage1.bmp

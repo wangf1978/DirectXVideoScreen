@@ -8,7 +8,7 @@ class CD3D11ShaderNV12{
 
 public:
 
-	CD3D11ShaderNV12(){}
+	CD3D11ShaderNV12() { memset(&m_input_texture2d_desc, 0, sizeof(m_input_texture2d_desc));}
 	~CD3D11ShaderNV12(){ OnRelease(); }
 
 	enum SHADER_CONVERSION{
@@ -27,8 +27,11 @@ public:
 		CONVERT_I420_SHADER,
 	};
 
-	HRESULT InitShaderNV12(CWICBitmap&);
-	HRESULT ProcessShaderNV12(const UINT, const UINT, LPCWSTR, LPCWSTR, LPCWSTR, const enum SHADER_CONVERSION);
+	HRESULT InitD3D11();
+	ID3D11Device* GetD3D11Device();
+	ID3D11ShaderResourceView* &GetInputSRV();
+	HRESULT InitShaderNV12();
+	HRESULT ProcessShaderNV12(LPCWSTR, LPCWSTR, LPCWSTR, const enum SHADER_CONVERSION);
 	void OnRelease();
 
 private:
@@ -86,6 +89,8 @@ private:
 	ID3D11SamplerState* m_pSamplerPointState = NULL;
 	ID3D11SamplerState* m_pSamplerLinearState = NULL;
 
+	D3D11_TEXTURE2D_DESC m_input_texture2d_desc;
+
 	void ProcessInputShader();
 	void ProcessSmallInputShader();
 	void ProcessLumaShader();
@@ -106,7 +111,7 @@ private:
 	void ProcessYChromaShader();
 
 	HRESULT InitVertexPixelShaders();
-	HRESULT InitTextures(CWICBitmap&);
+	HRESULT InitTextures(UINT uiWidth, UINT uiHeight);
 	HRESULT InitD3D11Resources(const UINT, const UINT);
 	void InitViewPort(const UINT, const UINT);
 	HRESULT InitVertexShaderFromFile(const WCHAR*, ID3D11VertexShader**, const BOOL);
@@ -115,7 +120,6 @@ private:
 
 	HRESULT InitRenderTargetView(const UINT, const UINT);
 	HRESULT InitSmallRenderTargetView(const UINT, const UINT);
-	HRESULT InitInputTexture(CWICBitmap&);
 	HRESULT InitShiftWidthTexture(const UINT);
 	HRESULT InitRenderTargetLuma(const UINT, const UINT);
 	HRESULT InitRenderTargetChroma(const UINT, const UINT);

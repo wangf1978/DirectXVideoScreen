@@ -23,12 +23,16 @@
 #include <d3d11_1.h>
 #include <d3dcompiler.h>
 #include <directxcolors.h>
+#include <tuple>
+#include <algorithm>
 
 //----------------------------------------------------------------------------------------------
 // Project Files
 #include "MacroTools.h"
 #include "FormatConversionTools.h"
-#include "WICBitmap.h"
 #include "D3D11ShaderNV12.h"
+
+#include <wrl/client.h>
+using namespace Microsoft::WRL;
 
 #endif

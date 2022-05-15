@@ -134,6 +134,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="D3D11ShaderNV12.cpp" />
+    <ClCompile Include="DDSTextureLoader.cpp" />
     <ClCompile Include="FormatConversionTools.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="StdAfx.cpp">
@@ -142,14 +143,17 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="WICBitmap.cpp" />
+    <ClCompile Include="WICTextureLoader.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3D11ShaderNV12.h" />
+    <ClInclude Include="DirectXHelpers.h" />
     <ClInclude Include="FormatConversionTools.h" />
+    <ClInclude Include="LoaderHelpers.h" />
     <ClInclude Include="MacroTools.h" />
+    <ClInclude Include="PlatformHelpers.h" />
     <ClInclude Include="StdAfx.h" />
-    <ClInclude Include="WICBitmap.h" />
+    <ClInclude Include="WICTextureLoader.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

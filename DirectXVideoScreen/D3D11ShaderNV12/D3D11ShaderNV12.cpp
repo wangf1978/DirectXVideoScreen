@@ -3,12 +3,12 @@
 //----------------------------------------------------------------------------------------------
 #include "StdAfx.h"
 #include <stdio.h>
-#include <wrl/client.h>
-#include <assert.h>
 
 using namespace Microsoft::WRL;
 
-HRESULT CD3D11ShaderNV12::InitShaderNV12(CWICBitmap& cWICBitmap)
+extern void SaveToBMP(ID3D11Device *device, ID3D11Texture2D* pTexture2D, const char* bmp_filename);
+
+HRESULT CD3D11ShaderNV12::InitD3D11()
 {
 	HRESULT hr = S_OK;
 
@@ -33,20 +33,66 @@ HRESULT CD3D11ShaderNV12::InitShaderNV12(CWICBitmap& cWICBitmap)
 	{
 		IF_FAILED_THROW(D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, uiD3D11CreateFlag, featureLevels, uiFeatureLevels, D3D11_SDK_VERSION, &m_pD3D11Device, &featureLevel, &m_pD3D11DeviceContext));
 		//-->IF_FAILED_THROW(m_pD3D11Device->CheckFormatSupport(DXGI_FORMAT_NV12, &uiFormatSupport));
-		IF_FAILED_THROW(InitVertexPixelShaders());
-		IF_FAILED_THROW(InitTextures(cWICBitmap));
-		IF_FAILED_THROW(InitD3D11Resources(cWICBitmap.GetWidth(), cWICBitmap.GetHeight()));
 	}
-	catch(HRESULT){}
+	catch (HRESULT) {}
 
 	return hr;
 }
 
-HRESULT CD3D11ShaderNV12::ProcessShaderNV12(const UINT uiWidth, const UINT uiHeight, LPCWSTR wszOutputImageFile1, LPCWSTR wszOutputImageFile2, LPCWSTR wszOutputImageFile3, const enum SHADER_CONVERSION ShaderConversion)
+ID3D11Device* CD3D11ShaderNV12::GetD3D11Device()
+{
+	return m_pD3D11Device;
+}
+
+ID3D11ShaderResourceView* &CD3D11ShaderNV12::GetInputSRV()
+{
+	return m_pInputRSV;
+}
+
+HRESULT CD3D11ShaderNV12::InitShaderNV12()
+{
+	HRESULT hr = S_OK;
+	ID3D11Resource* pResource = NULL;
+	ID3D11Texture2D* pTexture2D = NULL;
+	D3D11_RESOURCE_DIMENSION resDIM = D3D11_RESOURCE_DIMENSION_UNKNOWN;
+
+	IF_FAILED_RETURN(m_pSamplerLinearState != NULL ? E_UNEXPECTED : S_OK);
+
+	try
+	{
+		m_pInputRSV->GetResource(&pResource);
+		pResource->GetType(&resDIM);
+		if (resDIM == D3D11_RESOURCE_DIMENSION_TEXTURE2D)
+		{
+			IF_FAILED_THROW(pResource->QueryInterface(IID_PPV_ARGS(&pTexture2D)));
+			pTexture2D->GetDesc(&m_input_texture2d_desc);
+			IF_FAILED_THROW(InitVertexPixelShaders());
+			IF_FAILED_THROW(InitTextures(m_input_texture2d_desc.Width, m_input_texture2d_desc.Height));
+			IF_FAILED_THROW(InitD3D11Resources(m_input_texture2d_desc.Width, m_input_texture2d_desc.Height));
+
+		}
+		else
+			hr = E_NOTIMPL;
+	}
+	catch(HRESULT){}
+
+	SAFE_RELEASE(pResource);
+	SAFE_RELEASE(pTexture2D);
+
+	return hr;
+}
+
+HRESULT CD3D11ShaderNV12::ProcessShaderNV12(LPCWSTR wszOutputImageFile1, LPCWSTR wszOutputImageFile2, LPCWSTR wszOutputImageFile3, const enum SHADER_CONVERSION ShaderConversion)
 {
 	HRESULT hr = S_OK;
 
 	IF_FAILED_RETURN(m_pSamplerLinearState == NULL ? E_UNEXPECTED : S_OK);
+
+	UINT uiWidth = m_input_texture2d_desc.Width;
+	UINT uiHeight = m_input_texture2d_desc.Height;
+
+	if (uiWidth == 0 || uiHeight == 0)
+		return E_NOTIMPL;
 
 	if(ShaderConversion == CONVERT_INPUT_SHADER)
 	{
@@ -169,7 +215,7 @@ HRESULT CD3D11ShaderNV12::ProcessShaderNV12(const UINT uiWidth, const UINT uiHei
 		m_pD3D11DeviceContext->PSSetSamplers(0, 1, &m_pSamplerLinearState);
 		ProcessChromaDownSampledShaderToNV12();
 		
-		//SaveNV12(m_pNV12Texture, "RGB2NV12_out.yuv", uiWidth, uiHeight);
+		SaveNV12(m_pNV12Texture, "i:\\RGB2NV12_out.yuv", uiWidth, uiHeight);
 
 		CreateBmpFileFromNV12Texture(m_pNV12Texture, wszOutputImageFile2);
 	}
@@ -181,7 +227,7 @@ HRESULT CD3D11ShaderNV12::ProcessShaderNV12(const UINT uiWidth, const UINT uiHei
 		m_pD3D11DeviceContext->PSSetSamplers(0, 1, &m_pSamplerLinearState);
 		ProcessChromaDownSampledShaderToI420();
 
-		//SaveI420(m_pI420Texture, "RGB2I420_out.yuv", uiWidth, uiHeight);
+		SaveI420(m_pI420Texture, "i:\\RGB2I420_out.yuv", uiWidth, uiHeight);
 	}
 	else
 	{
@@ -520,15 +566,11 @@ HRESULT CD3D11ShaderNV12::InitVertexPixelShaders()
 	return hr;
 }
 
-HRESULT CD3D11ShaderNV12::InitTextures(CWICBitmap& cWICBitmap)
+HRESULT CD3D11ShaderNV12::InitTextures(UINT uiWidth, UINT uiHeight)
 {
-	HRESULT hr = S_OK;
-	UINT uiWidth = cWICBitmap.GetWidth();
-	UINT uiHeight = cWICBitmap.GetHeight();
-
+	HRESULT hr = S_OK;	
 	IF_FAILED_RETURN(InitRenderTargetView(uiWidth, uiHeight));
 	IF_FAILED_RETURN(InitSmallRenderTargetView(uiWidth, uiHeight));
-	IF_FAILED_RETURN(InitInputTexture(cWICBitmap));
 	IF_FAILED_RETURN(InitShiftWidthTexture(uiWidth));
 	IF_FAILED_RETURN(InitRenderTargetLuma(uiWidth, uiHeight));
 	IF_FAILED_RETURN(InitRenderTargetChroma(uiWidth, uiHeight));
@@ -709,43 +751,6 @@ HRESULT CD3D11ShaderNV12::InitSmallRenderTargetView(const UINT uiWidth, const UI
 	catch(HRESULT){}
 
 	SAFE_RELEASE(pViewTexture2D);
-
-	return hr;
-}
-
-HRESULT CD3D11ShaderNV12::InitInputTexture(CWICBitmap& cWICBitmap)
-{
-	HRESULT hr = S_OK;
-	ID3D11Texture2D* pInTexture2D = NULL;
-
-	D3D11_TEXTURE2D_DESC desc2D;
-	desc2D.Width = cWICBitmap.GetWidth();
-	desc2D.Height = cWICBitmap.GetHeight();
-	desc2D.MipLevels = 1;
-	desc2D.ArraySize = 1;
-	desc2D.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-	desc2D.SampleDesc.Count = 1;
-	desc2D.SampleDesc.Quality = 0;
-	desc2D.Usage = D3D11_USAGE_DEFAULT;
-	desc2D.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	desc2D.CPUAccessFlags = 0;
-	desc2D.MiscFlags = 0;
-
-	try
-	{
-		IF_FAILED_THROW(cWICBitmap.Create2DTextureFromBitmap(m_pD3D11Device, &pInTexture2D, desc2D));
-
-		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc2D;
-		srvDesc2D.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-		srvDesc2D.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-		srvDesc2D.Texture2D.MipLevels = 1;
-		srvDesc2D.Texture2D.MostDetailedMip = 0;
-
-		IF_FAILED_THROW(m_pD3D11Device->CreateShaderResourceView(pInTexture2D, &srvDesc2D, &m_pInputRSV));
-	}
-	catch(HRESULT){}
-
-	SAFE_RELEASE(pInTexture2D);
 
 	return hr;
 }
@@ -1830,6 +1835,67 @@ void CD3D11ShaderNV12::SaveI420(ID3D11Texture2D* pTexture2D, const char* nv12_fi
 				}
 
 				fclose(pFile);
+			}
+		}
+	}
+
+	return;
+}
+
+void SaveToBMP(ID3D11Device *device, ID3D11Texture2D* pTexture2D, const char* bmp_filename)
+{
+	HRESULT hr = S_OK;
+
+	D3D11_TEXTURE2D_DESC desc;
+	ComPtr<ID3D11Texture2D>  spTemp;
+	ComPtr<ID3D11DeviceContext> spDeviceContext;
+	ComPtr<IDXGISurface> spSurface;
+
+	device->GetImmediateContext(&spDeviceContext);
+
+	pTexture2D->GetDesc(&desc);
+	desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+	desc.ArraySize = 1;
+	desc.BindFlags = 0;
+	desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+	desc.Usage = D3D11_USAGE_STAGING;
+
+	if (SUCCEEDED(device->CreateTexture2D(&desc, NULL, &spTemp)))
+	{
+		spDeviceContext->CopyResource(spTemp.Get(), pTexture2D);
+
+		if (SUCCEEDED(hr = spTemp.As(&spSurface)))
+		{
+			FILE *pFile = NULL;
+			fopen_s(&pFile, bmp_filename, "wb");
+
+			if (pFile != NULL) {
+				DXGI_MAPPED_RECT map;
+				spSurface->Map(&map, DXGI_MAP_READ);
+
+				BITMAPFILEHEADER fh;
+				BITMAPINFOHEADER bi;
+				LONG data = desc.Width * desc.Height * 4;
+				ZeroMemory(reinterpret_cast<void*>(&fh), sizeof(BITMAPFILEHEADER));
+				ZeroMemory(reinterpret_cast<void*>(&bi), sizeof(BITMAPINFOHEADER));
+				fh.bfType = 0x4d42;
+				fh.bfSize = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + data;
+				fh.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+				bi.biBitCount = 32;
+				bi.biSizeImage = data;
+				bi.biPlanes = 1;
+				bi.biCompression = 0;
+				bi.biSize = sizeof(BITMAPINFOHEADER);
+				bi.biWidth = desc.Width;
+				bi.biHeight = -1 * desc.Height;
+				fwrite(&fh, sizeof(BITMAPFILEHEADER), 1, pFile);
+				fwrite(&bi, sizeof(BITMAPINFOHEADER), 1, pFile);
+
+				for (UINT i = 0; i < desc.Height; i++)
+					fwrite(map.pBits + (LONGLONG)i * map.Pitch, sizeof(BYTE), desc.Width * 4, pFile);
+
+				fclose(pFile);
+				spSurface->Unmap();
 			}
 		}
 	}
