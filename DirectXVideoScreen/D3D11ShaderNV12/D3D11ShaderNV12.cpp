@@ -208,26 +208,30 @@ HRESULT CD3D11ShaderNV12::ProcessShaderNV12(LPCWSTR wszOutputImageFile1, LPCWSTR
 	else if(ShaderConversion == CONVERT_NV12_SHADER)
 	{
 		// Separate the Luma and Chroma planes from RGB texture
-		ProcessYChromaShader();
+		ProcessYChromaShaderForNV12();
 
 		// DownSample Chroma plane directly to NV12 interleaved U/V plane
 		InitViewPort(uiWidth / 2, uiHeight / 2);
 		m_pD3D11DeviceContext->PSSetSamplers(0, 1, &m_pSamplerLinearState);
 		ProcessChromaDownSampledShaderToNV12();
 		
-		SaveNV12(m_pNV12Texture, "i:\\RGB2NV12_out.yuv", uiWidth, uiHeight);
+		//SaveNV12(m_pNV12Texture, "RGB2NV12_out.yuv", uiWidth, uiHeight);
 
 		CreateBmpFileFromNV12Texture(m_pNV12Texture, wszOutputImageFile2);
 	}
 	else if (ShaderConversion == CONVERT_I420_SHADER)
 	{
-		ProcessYCbCrShader3();
+		ProcessYChromaShaderForI420();
 
 		InitViewPort(uiWidth / 2, uiHeight / 2);
 		m_pD3D11DeviceContext->PSSetSamplers(0, 1, &m_pSamplerLinearState);
+		ProcessChromaDownSampledShader();
+
+		InitViewPort(uiWidth / 2, uiHeight / 2);
+		m_pD3D11DeviceContext->PSSetSamplers(0, 1, &m_pSamplerPointState);
 		ProcessChromaDownSampledShaderToI420();
 
-		SaveI420(m_pI420Texture, "i:\\RGB2I420_out.yuv", uiWidth, uiHeight);
+		//SaveI420(m_pI420Texture, "RGB2I420_out.yuv", uiWidth, uiHeight);
 	}
 	else
 	{
@@ -280,6 +284,7 @@ void CD3D11ShaderNV12::OnRelease()
 	SAFE_RELEASE(m_pPixelShader);
 	SAFE_RELEASE(m_pPixelShader2);
 	SAFE_RELEASE(m_pPixelShader3);
+	SAFE_RELEASE(m_pPixelShader4);
 	SAFE_RELEASE(m_pLumaShader);
 	SAFE_RELEASE(m_pChromaShader);
 	SAFE_RELEASE(m_pYCbCrShader);
@@ -399,10 +404,26 @@ void CD3D11ShaderNV12::ProcessYCbCrShader3()
 	m_pD3D11DeviceContext->Flush();
 }
 
-void CD3D11ShaderNV12::ProcessYChromaShader()
+void CD3D11ShaderNV12::ProcessYChromaShaderForNV12()
 {
 	ID3D11RenderTargetView* pYCbCrRT[2];
 	pYCbCrRT[0] = m_pNV12LumaRT;
+	pYCbCrRT[1] = m_pChromaRT;
+
+	m_pD3D11DeviceContext->OMSetRenderTargets(2, pYCbCrRT, NULL);
+	m_pD3D11DeviceContext->ClearRenderTargetView(pYCbCrRT[0], DirectX::Colors::Aquamarine);
+	m_pD3D11DeviceContext->ClearRenderTargetView(pYCbCrRT[1], DirectX::Colors::Aquamarine);
+	m_pD3D11DeviceContext->VSSetShader(m_pVertexShader, NULL, 0);
+	m_pD3D11DeviceContext->PSSetShader(m_pYCbCrShader, NULL, 0);
+	m_pD3D11DeviceContext->PSSetShaderResources(0, 1, &m_pInputRSV);
+	m_pD3D11DeviceContext->Draw(4, 0);
+	m_pD3D11DeviceContext->Flush();
+}
+
+void CD3D11ShaderNV12::ProcessYChromaShaderForI420()
+{
+	ID3D11RenderTargetView* pYCbCrRT[2];
+	pYCbCrRT[0] = m_pI420LumaRT;
 	pYCbCrRT[1] = m_pChromaRT;
 
 	m_pD3D11DeviceContext->OMSetRenderTargets(2, pYCbCrRT, NULL);
@@ -457,15 +478,11 @@ void CD3D11ShaderNV12::ProcessChromaDownSampledShaderToNV12()
 
 void CD3D11ShaderNV12::ProcessChromaDownSampledShaderToI420()
 {
-	ID3D11ShaderResourceView* pChromaRSV[2];
-	pChromaRSV[0] = m_pChromaCBRSV;
-	pChromaRSV[1] = m_pChromaCRRSV;
-
 	m_pD3D11DeviceContext->OMSetRenderTargets(1, &m_pI420ChromaRT, NULL);
 	m_pD3D11DeviceContext->ClearRenderTargetView(m_pI420ChromaRT, DirectX::Colors::Aquamarine);
 	m_pD3D11DeviceContext->VSSetShader(m_pVertexShader, NULL, 0);
-	m_pD3D11DeviceContext->PSSetShader(m_pPixelShader3, NULL, 0);
-	m_pD3D11DeviceContext->PSSetShaderResources(0, 2, pChromaRSV);
+	m_pD3D11DeviceContext->PSSetShader(m_pPixelShader4, NULL, 0);
+	m_pD3D11DeviceContext->PSSetShaderResources(0, 1, &m_pChromaDownSampledRSV);
 	m_pD3D11DeviceContext->Draw(4, 0);
 	m_pD3D11DeviceContext->Flush();
 }
@@ -555,6 +572,7 @@ HRESULT CD3D11ShaderNV12::InitVertexPixelShaders()
 	IF_FAILED_RETURN(InitPixelShaderFromFile(L"ScreenPS.hlsl", &m_pPixelShader));
 	IF_FAILED_RETURN(InitPixelShaderFromFile(L"ScreenPS2.hlsl", &m_pPixelShader2));
 	IF_FAILED_RETURN(InitPixelShaderFromFile(L"ScreenPS3.hlsl", &m_pPixelShader3));
+	IF_FAILED_RETURN(InitPixelShaderFromFile(L"ScreenPS4.hlsl", &m_pPixelShader4));
 	IF_FAILED_RETURN(InitPixelShaderFromFile(L"LumaPS.hlsl", &m_pLumaShader));
 	IF_FAILED_RETURN(InitPixelShaderFromFile(L"ChromaPS.hlsl", &m_pChromaShader));
 	IF_FAILED_RETURN(InitPixelShaderFromFile(L"YCbCrPS.hlsl", &m_pYCbCrShader));

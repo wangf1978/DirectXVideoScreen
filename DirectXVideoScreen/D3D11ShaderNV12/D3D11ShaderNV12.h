@@ -77,6 +77,7 @@ private:
 	ID3D11PixelShader* m_pPixelShader = NULL;
 	ID3D11PixelShader* m_pPixelShader2 = NULL;
 	ID3D11PixelShader* m_pPixelShader3 = NULL;
+	ID3D11PixelShader* m_pPixelShader4 = NULL;
 	ID3D11PixelShader* m_pLumaShader = NULL;
 	ID3D11PixelShader* m_pChromaShader = NULL;
 	ID3D11PixelShader* m_pYCbCrShader = NULL;
@@ -108,7 +109,8 @@ private:
 	void ProcessFakeUVShaderMips();
 	void ProcessUVShader();
 	void ProcessYNV12Shader();
-	void ProcessYChromaShader();
+	void ProcessYChromaShaderForNV12();
+	void ProcessYChromaShaderForI420();
 
 	HRESULT InitVertexPixelShaders();
 	HRESULT InitTextures(UINT uiWidth, UINT uiHeight);
